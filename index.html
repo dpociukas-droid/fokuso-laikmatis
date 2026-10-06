@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fokuso laikmatis</title>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --card: #ffffff;
+    --text: #1f1d1a;
+    --muted: #7a756c;
+    --line: #e6e1d8;
+    --accent: #d9534f;      /* focus */
+    --accent-soft: #fbe9e8;
+    --break: #3a8f6b;       /* break */
+    --break-soft: #e3f3ec;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161514; --card: #201f1d; --text: #f1eee8; --muted: #9a958c;
+      --line: #33312d; --accent-soft: #3a2322; --break-soft: #1d3329;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    display: flex; justify-content: center; padding: 32px 16px;
+  }
+  main { width: 100%; max-width: 440px; display: grid; gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+
+  /* Timer */
+  .modes { display: flex; gap: 6px; justify-content: center; margin-bottom: 8px; }
+  .mode {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px;
+    padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  }
+  .mode.active { background: var(--mode-soft); color: var(--mode); font-weight: 600; }
+  .ring { position: relative; width: 240px; height: 240px; margin: 8px auto; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 10; }
+  .ring .track { stroke: var(--line); }
+  .ring .progress { stroke: var(--mode); stroke-linecap: round; transition: stroke-dashoffset .3s linear; }
+  .time {
+    position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
+  }
+  .time .digits { font-size: 56px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+  .time .label { color: var(--muted); font-size: 14px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .controls { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
+  .btn {
+    font: inherit; font-weight: 600; border-radius: 10px; padding: 10px 22px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+  }
+  .btn.primary { background: var(--mode); border-color: var(--mode); color: #fff; min-width: 120px; }
+  .btn:active { transform: translateY(1px); }
+  .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+  /* Tasks */
+  h2 { font-size: 15px; margin: 0 0 12px; display: flex; justify-content: space-between; align-items: baseline; }
+  h2 span { color: var(--muted); font-weight: 400; font-size: 13px; }
+  form { display: flex; gap: 8px; margin-bottom: 12px; }
+  input[type=text] {
+    flex: 1; font: inherit; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); min-width: 0;
+  }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  li {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid transparent; cursor: pointer;
+  }
+  li:hover { background: var(--bg); }
+  li.selected { border-color: var(--mode); background: var(--mode-soft); }
+  li.done .title { text-decoration: line-through; color: var(--muted); }
+  li .title { flex: 1; overflow-wrap: anywhere; }
+  li .count { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  li input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--mode); cursor: pointer; }
+  li .del { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 0 4px; opacity: 0; }
+  li:hover .del, li .del:focus { opacity: 1; }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 8px; }
+  @media (hover: none) { li .del { opacity: 1; } }
+</style>
+</head>
+<body>
+<main>
+  <section class="card" aria-label="Laikmatis">
+    <div class="modes" role="tablist">
+      <button class="mode" data-mode="focus">Darbas</button>
+      <button class="mode" data-mode="short">Trumpa pertrauka</button>
+      <button class="mode" data-mode="long">Ilga pertrauka</button>
+    </div>
+    <div class="ring">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="track" cx="60" cy="60" r="54"/>
+        <circle class="progress" cx="60" cy="60" r="54"/>
+      </svg>
+      <div class="time">
+        <div class="digits" id="digits">25:00</div>
+        <div class="label" id="label">Pasirinkite užduotį</div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="startBtn">Pradėti</button>
+      <button class="btn" id="resetBtn">Iš naujo</button>
+      <button class="btn" id="skipBtn" title="Pereiti į kitą etapą">Praleisti</button>
+    </div>
+    <div class="hint">Tarpas = pradėti/pristabdyti · R = iš naujo</div>
+  </section>
+
+  <section class="card" aria-label="Užduotys">
+    <h2>Užduotys <span id="today">Šiandien 0 sesijų</span></h2>
+    <form id="addForm">
+      <input type="text" id="newTask" placeholder="Prie ko dirbate?" maxlength="120" autocomplete="off">
+      <button class="btn" type="submit">Pridėti</button>
+    </form>
+    <ul id="list"></ul>
+  </section>
+</main>
+
+<script>
+const MODES = {
+  focus: { minutes: 25, label: "Darbas",       color: "var(--accent)", soft: "var(--accent-soft)" },
+  short: { minutes: 5,  label: "Trumpa pertrauka", color: "var(--break)",  soft: "var(--break-soft)" },
+  long:  { minutes: 15, label: "Ilga pertrauka",  color: "var(--break)",  soft: "var(--break-soft)" },
+};
+const LONG_BREAK_EVERY = 4;
+const STORE_KEY = "focus-timer-v1";
+const CIRC = 2 * Math.PI * 54;
+
+// ---- State ----
+let state = load() || { tasks: [], selectedId: null, log: [] }; // log: [{taskId, at}]
+let mode = "focus";
+let remaining = MODES.focus.minutes * 60 * 1000;
+let endsAt = null;      // timestamp while running, null while paused
+let tick = null;
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)); } catch { return null; }
+}
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
+}
+
+// ---- Timer ----
+const $ = id => document.getElementById(id);
+const progress = document.querySelector(".progress");
+progress.style.strokeDasharray = CIRC;
+
+function setMode(next) {
+  pause();
+  mode = next;
+  remaining = MODES[mode].minutes * 60 * 1000;
+  const root = document.documentElement.style;
+  root.setProperty("--mode", MODES[mode].color);
+  root.setProperty("--mode-soft", MODES[mode].soft);
+  document.querySelectorAll(".mode").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+  render();
+}
+
+function start() {
+  if (endsAt) return;
+  endsAt = Date.now() + remaining;
+  tick = setInterval(update, 250);
+  $("startBtn").textContent = "Pauzė";
+  unlockAudio();
+}
+function pause() {
+  if (!endsAt) return;
+  remaining = Math.max(0, endsAt - Date.now());
+  endsAt = null;
+  clearInterval(tick);
+  $("startBtn").textContent = "Pradėti";
+}
+function update() {
+  if (endsAt) remaining = Math.max(0, endsAt - Date.now());
+  if (remaining === 0) return finish();
+  renderTimer();
+}
+
+function finish() {
+  pause();
+  chime();
+  if (mode === "focus") {
+    state.log.push({ taskId: state.selectedId, at: Date.now() });
+    save();
+    const todayCount = sessionsToday();
+    notify("Darbo sesija baigta!", "Laikas pailsėti.");
+    setMode(todayCount % LONG_BREAK_EVERY === 0 ? "long" : "short");
+  } else {
+    notify("Pertrauka baigėsi", "Pasiruošę kitai darbo sesijai?");
+    setMode("focus");
+  }
+  renderTasks();
+}
+
+function fmt(ms) {
+  const s = Math.ceil(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
+function renderTimer() {
+  const total = MODES[mode].minutes * 60 * 1000;
+  $("digits").textContent = fmt(remaining);
+  progress.style.strokeDashoffset = CIRC * (1 - remaining / total);
+  const task = state.tasks.find(t => t.id === state.selectedId);
+  $("label").textContent = mode === "focus" ? (task ? task.title : "Užduotis nepasirinkta") : MODES[mode].label;
+  document.title = endsAt ? `${fmt(remaining)} · ${MODES[mode].label}` : "Fokuso laikmatis";
+}
+
+// ---- Sound & notifications ----
+let audio;
+function unlockAudio() {
+  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch {}
+  if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+}
+function chime() {
+  if (!audio) return;
+  [660, 880, 1320].forEach((freq, i) => {
+    const o = audio.createOscillator(), g = audio.createGain();
+    const t = audio.currentTime + i * 0.18;
+    o.frequency.value = freq; o.type = "sine";
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    o.connect(g).connect(audio.destination);
+    o.start(t); o.stop(t + 0.65);
+  });
+}
+function notify(title, body) {
+  try { if (Notification.permission === "granted" && document.hidden) new Notification(title, { body }); } catch {}
+}
+
+// ---- Tasks ----
+function sessionsToday() {
+  const midnight = new Date().setHours(0, 0, 0, 0);
+  return state.log.filter(e => e.at >= midnight).length;
+}
+function renderTasks() {
+  const list = $("list");
+  list.innerHTML = "";
+  if (!state.tasks.length) {
+    list.innerHTML = `<li class="empty">Pridėkite užduotį ir spauskite „Pradėti“.</li>`;
+  }
+  for (const t of state.tasks) {
+    const n = state.log.filter(e => e.taskId === t.id).length;
+    const li = document.createElement("li");
+    li.className = (t.id === state.selectedId ? "selected " : "") + (t.done ? "done" : "");
+    li.innerHTML = `
+      <input type="checkbox" ${t.done ? "checked" : ""} aria-label="Pažymėti kaip atliktą">
+      <span class="title"></span>
+      <span class="count">${"🍅".repeat(Math.min(n, 5))}${n > 5 ? " ×" + n : ""}</span>
+      <button class="del" aria-label="Ištrinti užduotį">×</button>`;
+    li.querySelector(".title").textContent = t.title;
+    li.onclick = () => { state.selectedId = t.id; save(); renderTasks(); };
+    li.querySelector("input").onclick = e => {
+      e.stopPropagation(); t.done = e.target.checked; save(); renderTasks();
+    };
+    li.querySelector(".del").onclick = e => {
+      e.stopPropagation();
+      state.tasks = state.tasks.filter(x => x.id !== t.id);
+      if (state.selectedId === t.id) state.selectedId = null;
+      save(); renderTasks();
+    };
+    list.appendChild(li);
+  }
+  const n = sessionsToday();
+  $("today").textContent = `Šiandien ${n} ${lt(n)}`;
+  renderTimer();
+}
+// Lithuanian plural: 1 sesija, 2–9 sesijos, 0 / 10–20 sesijų
+function lt(n) {
+  const d = n % 10, t = n % 100;
+  if (d === 1 && t !== 11) return "sesija";
+  if (d >= 2 && (t < 10 || t >= 20)) return "sesijos";
+  return "sesijų";
+}
+function render() { renderTimer(); renderTasks(); }
+
+// ---- Wiring ----
+$("addForm").onsubmit = e => {
+  e.preventDefault();
+  const title = $("newTask").value.trim();
+  if (!title) return;
+  const task = { id: Date.now().toString(36), title, done: false };
+  state.tasks.push(task);
+  if (!state.selectedId) state.selectedId = task.id;
+  $("newTask").value = "";
+  save(); renderTasks();
+};
+$("startBtn").onclick = () => (endsAt ? pause() : start());
+$("resetBtn").onclick = () => setMode(mode);
+$("skipBtn").onclick = () => setMode(mode === "focus" ? "short" : "focus");
+document.querySelectorAll(".mode").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); endsAt ? pause() : start(); }
+  if (e.key === "r" || e.key === "R") setMode(mode);
+});
+
+setMode("focus");
+</script>
+</body>
+</html>
